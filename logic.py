@@ -1,18 +1,12 @@
 from typing import Set, Dict, List
 
 class Sentence:
-    def __and__(self, other):
-        return And(self, other)
-
-    def __or__(self, other):
-        return Or(self, other)
-
-    def __invert__(self):
-        return Not(self)
+    def __and__(self, other): return And(self, other)
+    def __or__(self, other): return Or(self, other)
+    def __invert__(self): return Not(self)
 
 class Symbol(Sentence):
-    def __init__(self, name: str):
-        self.name = name
+    def __init__(self, name: str): self.name = name
     def __repr__(self): return self.name
     def __hash__(self): return hash(self.name)
     def __eq__(self, other): return isinstance(other, Symbol) and self.name == other.name
@@ -44,7 +38,6 @@ class Iff(Sentence):
     def __repr__(self): return f"({self.left} <=> {self.right})"
 
 def get_symbols(sentence: Sentence) -> Set[str]:
-    """Recursively collects all unique variables."""
     if isinstance(sentence, Symbol): return {sentence.name}
     elif isinstance(sentence, Not): return get_symbols(sentence.operand)
     elif isinstance(sentence, (And, Or)):
@@ -59,9 +52,7 @@ def get_symbols(sentence: Sentence) -> Set[str]:
     return set()
 
 def evaluate_partial(sentence: Sentence, model: Dict[str, bool]):
-    """Evaluates a sentence, returning None if truth value cannot be determined yet."""
-    if isinstance(sentence, Symbol):
-        return model.get(sentence.name, None)
+    if isinstance(sentence, Symbol): return model.get(sentence.name, None)
     elif isinstance(sentence, Not):
         val = evaluate_partial(sentence.operand, model)
         return not val if val is not None else None
@@ -79,50 +70,34 @@ def evaluate_partial(sentence: Sentence, model: Dict[str, bool]):
             if val is True: return True
             if val is None: has_none = True
         return None if has_none else False
-    elif isinstance(sentence, Implies):
-        val_a = evaluate_partial(sentence.antecedent, model)
-        val_b = evaluate_partial(sentence.consequent, model)
-        if val_a is False or val_b is True: return True
-        if val_a is True and val_b is False: return False
-        return None
     elif isinstance(sentence, Iff):
         val_a = evaluate_partial(sentence.left, model)
         val_b = evaluate_partial(sentence.right, model)
-        if val_a is not None and val_b is not None:
-            return val_a == val_b
+        if val_a is not None and val_b is not None: return val_a == val_b
         return None
 
 def check_all(kb_sentence: Sentence, query: Sentence, symbols: List[str], model: Dict[str, bool]) -> bool:
-    """Smart backtracking search with early pruning."""
-    # PRUNING: If current assignments make the KB false, kill this branch immediately
     kb_val = evaluate_partial(kb_sentence, model)
-    if kb_val is False:
-        return True # Vacuously true (model doesn't satisfy KB, so we ignore it)
-
-    # If all variables assigned and KB is True, query must be True
-    if not symbols:
-        return bool(evaluate_partial(query, model))
+    if kb_val is False: return True
+    if not symbols: return bool(evaluate_partial(query, model))
     
     p = symbols[0]
     rest = symbols[1:]
     
-    # Branch 1: Try False
     model[p] = False
     if not check_all(kb_sentence, query, rest, model):
         del model[p]
         return False
         
-    # Branch 2: Try True
     model[p] = True
     if not check_all(kb_sentence, query, rest, model):
         del model[p]
         return False
         
-    # Backtrack clean up
     del model[p]
     return True
 
 def entails(kb: Sentence, query: Sentence) -> bool:
-    """Returns True iff KB |= Query."""
+    if not kb.conjuncts: return False
     symbols = list(get_symbols(kb).union(get_symbols(query)))
     return check_all(kb, query, symbols, {})

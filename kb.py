@@ -5,19 +5,15 @@ class WumpusKB:
     def __init__(self, size: int = 4):
         self.size = size
         self.clauses: List[Sentence] = []
-        self._init_rules()
+        self.axiomatized_tiles = set()
+        
+        self.tell(~self.p(1, 1))
+        self.tell(~self.w(1, 1))
 
-    def p(self, x: int, y: int) -> Symbol:
-        return Symbol(f"P_{x}_{y}")
-
-    def w(self, x: int, y: int) -> Symbol:
-        return Symbol(f"W_{x}_{y}")
-
-    def b(self, x: int, y: int) -> Symbol:
-        return Symbol(f"B_{x}_{y}")
-
-    def s(self, x: int, y: int) -> Symbol:
-        return Symbol(f"S_{x}_{y}")
+    def p(self, x, y): return Symbol(f"P_{x}_{y}")
+    def w(self, x, y): return Symbol(f"W_{x}_{y}")
+    def b(self, x, y): return Symbol(f"B_{x}_{y}")
+    def s(self, x, y): return Symbol(f"S_{x}_{y}")
 
     def get_adjacent(self, x: int, y: int) -> List[Tuple[int, int]]:
         adj = []
@@ -27,19 +23,17 @@ class WumpusKB:
                 adj.append((nx, ny))
         return adj
 
-    def _init_rules(self):
-        self.tell(~self.p(1, 1))
-        self.tell(~self.w(1, 1))
-
-        for x in range(1, self.size + 1):
-            for y in range(1, self.size + 1):
-                adj = self.get_adjacent(x, y)
-                
-                pit_disjuncts = [self.p(ax, ay) for ax, ay in adj]
-                self.tell(Iff(self.b(x, y), Or(*pit_disjuncts)))
-                
-                wumpus_disjuncts = [self.w(ax, ay) for ax, ay in adj]
-                self.tell(Iff(self.s(x, y), Or(*wumpus_disjuncts)))
+    def add_tile_axioms(self, x: int, y: int):
+        if (x, y) in self.axiomatized_tiles: return
+        adj = self.get_adjacent(x, y)
+        
+        pit_disjuncts = [self.p(ax, ay) for ax, ay in adj]
+        self.tell(Iff(self.b(x, y), Or(*pit_disjuncts)))
+        
+        wumpus_disjuncts = [self.w(ax, ay) for ax, ay in adj]
+        self.tell(Iff(self.s(x, y), Or(*wumpus_disjuncts)))
+        
+        self.axiomatized_tiles.add((x, y))
 
     def tell(self, sentence: Sentence):
         self.clauses.append(sentence)
@@ -49,10 +43,6 @@ class WumpusKB:
 
     def ask_is_safe(self, x: int, y: int) -> bool:
         kb_conjunction = self.get_kb_sentence()
-        return entails(kb_conjunction, ~self.p(x, y)) and entails(kb_conjunction, ~self.w(x, y))
-
-    def ask_has_pit(self, x: int, y: int) -> bool:
-        return entails(self.get_kb_sentence(), self.p(x, y))
-
-    def ask_has_wumpus(self, x: int, y: int) -> bool:
-        return entails(self.get_kb_sentence(), self.w(x, y))
+        no_pit = entails(kb_conjunction, ~self.p(x, y))
+        no_wumpus = entails(kb_conjunction, ~self.w(x, y))
+        return no_pit and no_wumpus
